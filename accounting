@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego de Avión 2D Mejorado</title>
+    <style>
+        /* Importación de la fuente Inter para un look moderno */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
+        /* Variables CSS para una fácil personalización de colores */
+        :root {
+            --background-color: #f0f4f8;
+            --primary-text: #1a202c;
+            --secondary-text: #4a5568;
+            --accent-color: #4299e1;
+            --success-color: #48bb78;
+            --danger-color: #e53e3e;
+            --canvas-sky: #87CEEB;
+            --canvas-ground: #a0aec0;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
+            color: var(--primary-text);
+            user-select: none; /* Evita la selección de texto durante el juego */
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            /* Gradiente sutil para el fondo del cielo */
+            background: linear-gradient(to bottom, var(--canvas-sky) 80%, var(--canvas-ground));
+        }
+
+        .ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 15px 20px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: var(--secondary-text);
+            z-index: 10;
+        }
+
+        #score-display, #lives-display, #highscore-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(45, 55, 72, 0.95);
+            color: white;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            text-align: center;
+            width: 90%;
+            max-width: 450px;
+            z-index: 20;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            font-size: 1.1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-sizing: border-box;
+        }
+
+        #message-box h2 {
+            font-size: 2.2rem;
+            margin-top: 0;
+            margin-bottom: 1rem;
+            text-transform: capitalize;
+        }
+        
+        #message-box p {
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 9999px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background-color: var(--accent-color);
+            color: white;
+        }
+
+        .button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 7px 14px rgba(0, 0, 0, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
+        }
+        
+        .button:active {
+            transform: translateY(1px);
+        }
+
+        #mobile-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            transform: none;
+            display: none; /* Se activa con media query */
+            grid-template-areas: ". up ." "left . right" ". down .";
+            gap: 20px;
+            z-index: 10;
+        }
+        
+        /* Estilos específicos para pantallas móviles */
+        @media (max-width: 768px) {
+            #mobile-controls {
+                display: grid;
+            }
+            .ui-panel {
+                top: 10px;
+                left: 10px;
+                padding: 10px;
+                font-size: 1rem;
+            }
+            #mobile-controls .button {
+                width: 70px;
+                height: 70px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-size: 2rem;
+                background-color: rgba(74, 85, 104, 0.7);
+                color: white;
+                border-radius: 50%;
+            }
+            #up-button { grid-area: up; }
+            #down-button { grid-area: down; }
+            #left-button { grid-area: left; }
+            #right-button { grid-area: right; }
+        }
+
+        /* Animación para el flash de la pantalla */
+        @keyframes screen-flash {
+            from { background-color: rgba(229, 62, 62, 0.3); }
+            to { background-color: transparent; }
+        }
+        .flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            animation: screen-flash 0.3s ease-out;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="fx-layer"></div> <!-- Capa para efectos visuales como el flash -->
+
+    <div class="ui-panel">
+        <div id="score-display">Puntaje: <span>0</span></div>
+        <div id="lives-display">Vidas: <span>3</span></div>
+        <div id="highscore-display">Máximo: <span>0</span></div>
+    </div>
+
+    <div id="message-box">
+        <h2 id="message-title">Sky Words</h2>
+        <p id="message-text">Usa WASD o las flechas para mover el avión. Esquiva las palabras incorrectas y atrapa las correctas para ganar puntos.</p>
+        <button id="start-game-button" class="button">Comenzar Juego</button>
+    </div>
+
+    <div id="mobile-controls">
+        <button id="left-button" class="button">◄</button>
+        <button id="up-button" class="button">▲</button>
+        <button id="down-button" class="button">▼</button>
+        <button id="right-button" class="button">►</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const fxLayer = document.getElementById('fx-layer');
+        
+        let gameActive = false;
+        let score = 0;
+        let lives = 3;
+        let highScore = localStorage.getItem('skyWordsHighScore') || 0;
+        let highestDifficultyReached = localStorage.getItem('skyWordsHighestDifficulty') || 'fácil';
+        let lastTime = 0;
+        let lastCloudSpawnTime = 0; 
+        
+        // Variables para la dificultad dinámica
+        let speedMultiplier = 1;
+
+        let words = [];
+        let particles = [];
+        let clouds = [];
+        
+        const player = {
+            x: 150,
+            y: 300,
+            width: 80, 
+            height: 30, 
+            speed: 7,
+            dx: 0,
+            dy: 0,
+            tilt: 0,
+            tiltSpeed: 0.015
+        };
+
+        const wordConfig = {
+            baseSpeed: 2,
+            spawnInterval: 1200, 
+            lastSpawnTime: 0
+        };
+
+        const difficulties = {
+            'fácil': {
+                words: ['hello', 'hi', 'greetings', 'hey', 'welcome', 'howdy', 'yo', 'sup', 'morning'],
+                incorrectWords: ['goodbye', 'later', 'see you', 'thanks', 'please', 'yellow', 'night'],
+                instruction: '¡Recoge solo los saludos en inglés!',
+                lives: 3,
+                speedMultiplier: 1.0,
+                pointsToAdvance: 100, // La puntuación máxima para pasar al siguiente nivel
+                spawnInterval: 1200
+            },
+            'intermedio': {
+                words: ['doctor', 'teacher', 'engineer', 'artist', 'pilot', 'chef', 'nurse', 'writer', 'actor', 'judge'],
+                incorrectWords: ['hospital', 'school', 'office', 'studio', 'plane', 'kitchen', 'pencil', 'movie'],
+                instruction: '¡Recoge solo las ocupaciones en inglés!',
+                lives: 3,
+                speedMultiplier: 1.5,
+                pointsToAdvance: 100,
+                spawnInterval: 1000
+            },
+            'avanzado': {
+                words: ['run', 'walk', 'talk', 'eat', 'sleep', 'drink', 'write', 'read', 'play', 'think', 'see', 'jump', 'listen', 'work', 'study'],
+                incorrectWords: ['running', 'walked', 'ate', 'thought', 'jumpy', 'worker', 'study', 'food', 'book'],
+                instruction: '¡Demuestra tu gramática! Recoge solo los verbos en presente simple.',
+                lives: 3,
+                speedMultiplier: 2.0,
+                pointsToAdvance: 100,
+                spawnInterval: 800
+            }
+        };
+        
+        let currentDifficultyKey = 'fácil';
+        let currentDifficulty = difficulties[currentDifficultyKey];
+        
+        const scoreDisplay = document.querySelector('#score-display span');
+        const livesDisplay = document.querySelector('#lives-display span');
+        const highscoreDisplay = document.querySelector('#highscore-display span');
+        const messageBox = document.getElementById('message-box');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+        const startGameButton = document.getElementById('start-game-button');
+
+        function init() {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            setupInputListeners();
+            highscoreDisplay.textContent = highScore;
+            generateInitialClouds();
+            showLevelInstructions(highestDifficultyReached);
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        function setupInputListeners() {
+            const keyMap = {};
+            const handleKeyDown = (e) => { 
+                if (!gameActive) return; 
+                keyMap[e.key.toLowerCase()] = true; 
+                updatePlayerMovement(); 
+            };
+            const handleKeyUp = (e) => { 
+                keyMap[e.key.toLowerCase()] = false; 
+                updatePlayerMovement(); 
+            };
+            const updatePlayerMovement = () => {
+                player.dy = 0; player.dx = 0;
+                if (keyMap['w'] || keyMap['arrowup']) player.dy = -player.speed;
+                if (keyMap['s'] || keyMap['arrowdown']) player.dy = player.speed;
+                if (keyMap['a'] || keyMap['arrowleft']) player.dx = -player.speed;
+                if (keyMap['d'] || keyMap['arrowright']) player.dx = player.speed;
+            };
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+            const controls = {
+                'up-button': { dy: -player.speed }, 'down-button': { dy: player.speed },
+                'left-button': { dx: -player.speed }, 'right-button': { dx: player.speed }
+            };
+            for (const [id, move] of Object.entries(controls)) {
+                const button = document.getElementById(id);
+                button.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (!gameActive) return; 
+                    if (move.dx !== undefined) player.dx = move.dx;
+                    if (move.dy !== undefined) player.dy = move.dy;
+                }, { passive: false });
+                button.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    if (!gameActive) return; 
+                    if (move.dx !== undefined) player.dx = 0;
+                    if (move.dy !== undefined) player.dy = 0;
+                }, { passive: false });
+            }
+        }
+        
+        function gameLoop(timestamp) {
+            if (!gameActive) return;
+            const deltaTime = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+            update(deltaTime, timestamp);
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(deltaTime, timestamp) {
+            updatePlayer(deltaTime);
+            updateEntities(words, deltaTime);
+            updateEntities(particles, deltaTime);
+            updateEntities(clouds, deltaTime);
+
+            if (timestamp - wordConfig.lastSpawnTime > wordConfig.spawnInterval) {
+                spawnWord();
+                wordConfig.lastSpawnTime = timestamp;
+            }
+
+            const cloudSpawnInterval = 5000;
+            if (timestamp - lastCloudSpawnTime > cloudSpawnInterval) {
+                clouds.push(createCloud());
+                lastCloudSpawnTime = timestamp;
+            }
+
+            checkCollisions();
+            if (lives <= 0) {
+                endGame(false);
+            }
+        }
+
+        function updatePlayer(deltaTime) {
+            player.x += player.dx;
+            player.y += player.dy;
+            player.x = Math.max(player.width / 2, Math.min(canvas.width - player.width / 2, player.x));
+            player.y = Math.max(player.height / 2, Math.min(canvas.height - player.height / 2, player.y));
+            const targetTilt = player.dy * player.tiltSpeed;
+            player.tilt += (targetTilt - player.tilt) * 0.1;
+        }
+        
+        function updateEntities(entityArray, deltaTime) {
+            for (let i = entityArray.length - 1; i >= 0; i--) {
+                const entity = entityArray[i];
+                entity.update(deltaTime);
+                if (entity.isOffscreen || entity.life <= 0) {
+                    if (entity.type === 'word' && entity.isCorrect && entity.isOffscreen) {
+                        loseLife();
+                    }
+                    entityArray.splice(i, 1);
+                }
+            }
+        }
+
+        function checkCollisions() {
+            for (let i = words.length - 1; i >= 0; i--) {
+                const word = words[i];
+                if (isColliding(player, word)) {
+                    if (word.isCorrect) {
+                        score += 5;
+                        updateScore();
+                        createParticles(word.x, word.y, '#48bb78', 20);
+                        playSound('correct');
+
+                        // ✅ Implementa el aumento de velocidad basado en el puntaje
+                        const speedIncreaseFactor = Math.floor(score / 5) * 0.025;
+                        speedMultiplier = 1 + Math.min(speedIncreaseFactor, 0.5); // Limita el aumento a un máximo del 50%
+                        
+                        // Verifica si se alcanzó la puntuación para avanzar
+                        if (score >= currentDifficulty.pointsToAdvance) {
+                            advanceDifficulty();
+                        }
+                    } else {
+                        loseLife();
+                        createParticles(word.x, word.y, '#e53e3e', 10);
+                        playSound('incorrect');
+                        screenFlash();
+                    }
+                    words.splice(i, 1);
+                }
+            }
+        }
+
+        function isColliding(rect1, rect2) {
+            return rect1.x - rect1.width / 2 < rect2.x + rect2.width / 2 &&
+                    rect1.x + rect1.width / 2 > rect2.x - rect2.width / 2 &&
+                    rect1.y - rect1.height / 2 < rect2.y + rect2.height / 2 &&
+                    rect1.y + rect1.height / 2 > rect2.y - rect2.height / 2;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            clouds.forEach(c => c.draw(ctx));
+            words.forEach(w => w.draw(ctx));
+            drawPlayer();
+            particles.forEach(p => p.draw(ctx));
+        }
+
+        function drawPlayer() {
+            const x = player.x;
+            const y = player.y;
+            const scale = 0.6; // Avión más pequeño
+            
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(player.tilt);
+
+            ctx.strokeStyle = '#2d3748';
+            ctx.lineWidth = 3;
+            
+            // Fuselaje principal (minimalista)
+            ctx.fillStyle = '#edf2f7';
+            ctx.beginPath();
+            ctx.moveTo(50 * scale, 0);
+            ctx.quadraticCurveTo(20 * scale, -20 * scale, -50 * scale, -10 * scale);
+            ctx.lineTo(-60 * scale, 0);
+            ctx.quadraticCurveTo(-50 * scale, 10 * scale, -50 * scale, 10 * scale);
+            ctx.quadraticCurveTo(20 * scale, 20 * scale, 50 * scale, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Ala
+            ctx.fillStyle = '#a0aec0';
+            ctx.beginPath();
+            ctx.moveTo(0 * scale, -5 * scale);
+            ctx.lineTo(-20 * scale, -35 * scale);
+            ctx.lineTo(-30 * scale, -30 * scale);
+            ctx.lineTo(0 * scale, 0 * scale);
+            ctx.moveTo(0 * scale, 5 * scale);
+            ctx.lineTo(-20 * scale, 35 * scale);
+            ctx.lineTo(-30 * scale, 30 * scale);
+            ctx.lineTo(0 * scale, 0 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Cola
+            ctx.fillStyle = '#e53e3e';
+            ctx.beginPath();
+            ctx.moveTo(-50 * scale, -8 * scale);
+            ctx.lineTo(-70 * scale, -25 * scale);
+            ctx.lineTo(-60 * scale, -8 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // Cabina
+            ctx.fillStyle = '#4299e1';
+            ctx.beginPath();
+            ctx.arc(35 * scale, 0, 8 * scale, -Math.PI / 2, Math.PI / 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function createWord(text, isCorrect, speed) {
+            const yPosition = Math.random() * canvas.height * 0.8 + canvas.height * 0.1;
+            const xPosition = canvas.width + 50;
+
+            return {
+                x: xPosition,
+                y: yPosition,
+                width: 0, 
+                height: 0,
+                text: text,
+                isCorrect: isCorrect,
+                speed: speed,
+                isOffscreen: false,
+                type: 'word', 
+                
+                update(deltaTime) {
+                    this.x -= this.speed * deltaTime * 60;
+                    if (this.x < -150) { 
+                        this.isOffscreen = true;
+                    }
+                },
+                
+                draw(ctx) {
+                    // ✅ Todas las palabras ahora son de color negro
+                    ctx.fillStyle = 'black'; 
+                    ctx.font = 'bold 24px Inter';
+                    const textMetrics = ctx.measureText(this.text);
+                    this.width = textMetrics.width;
+                    this.height = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
+
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(this.text, this.x, this.y);
+                }
+            };
+        }
+
+        function spawnWord() {
+            const isCorrect = Math.random() > 0.4;
+            const text = isCorrect
+                ? currentDifficulty.words[Math.floor(Math.random() * currentDifficulty.words.length)]
+                : currentDifficulty.incorrectWords[Math.floor(Math.random() * currentDifficulty.incorrectWords.length)];
+            
+            // Usa el multiplicador de velocidad dinámico
+            const speed = (wordConfig.baseSpeed * currentDifficulty.speedMultiplier) * speedMultiplier;
+            words.push(createWord(text, isCorrect, speed));
+        }
+
+        function generateInitialClouds() {
+            for (let i = 0; i < 10; i++) {
+                clouds.push(createCloud(Math.random() * canvas.width));
+            }
+        }
+        
+        function createCloud(x) {
+            const y = Math.random() * canvas.height * 0.6;
+            const scale = Math.random() * 0.5 + 0.5;
+            return {
+                x: x || canvas.width + 100, y, scale,
+                speed: 0.5 * scale,
+                isOffscreen: false,
+                update() { this.x -= this.speed; if (this.x < -200 * this.scale) this.isOffscreen = true; },
+                draw(ctx) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${0.6 * this.scale})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, 30 * this.scale, 0, Math.PI * 2);
+                    ctx.arc(this.x + 30 * this.scale, this.y - 15 * this.scale, 40 * this.scale, 0, Math.PI * 2);
+                    ctx.arc(this.x + 70 * this.scale, this.y, 35 * this.scale, 0, Math.PI * 2);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            };
+        }
+        
+        function createParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x, y, color,
+                    size: Math.random() * 5 + 2,
+                    life: 1,
+                    vx: Math.random() * 6 - 3,
+                    vy: Math.random() * 6 - 3,
+                    update(deltaTime) { this.x += this.vx; this.y += this.vy; this.life -= deltaTime * 2; },
+                    draw(ctx) {
+                        ctx.globalAlpha = Math.max(0, this.life);
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.globalAlpha = 1.0;
+                    }
+                });
+            }
+        }
+        
+        // --- GESTIÓN DEL ESTADO DEL JUEGO Y NIVELES ---
+
+        function showLevelInstructions(levelKey) {
+            gameActive = false;
+            currentDifficultyKey = levelKey;
+            currentDifficulty = difficulties[levelKey];
+            
+            wordConfig.spawnInterval = currentDifficulty.spawnInterval;
+            
+            highestDifficultyReached = levelKey;
+            localStorage.setItem('skyWordsHighestDifficulty', levelKey);
+            
+            messageTitle.textContent = `Nivel: ${levelKey}`;
+            messageText.textContent = currentDifficulty.instruction;
+            
+            startGameButton.textContent = "Comenzar Nivel";
+            startGameButton.onclick = startCurrentLevel;
+            messageBox.style.display = 'flex';
+        }
+
+        function startCurrentLevel() {
+            messageBox.style.display = 'none';
+            resetLevelState();
+            gameActive = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetLevelState() {
+            score = 0;
+            lives = currentDifficulty.lives;
+            speedMultiplier = 1; // Reinicia el multiplicador al iniciar un nuevo nivel
+            updateScore();
+            updateLives();
+            words = [];
+            particles = [];
+            player.x = 150;
+            player.y = canvas.height / 2;
+            player.dx = 0;
+            player.dy = 0;
+        }
+
+        function loseLife() {
+            lives--;
+            updateLives();
+            if (lives <= 0) {
+                playSound('gameOver');
+                endGame(false);
+            }
+        }
+        
+        function advanceDifficulty() {
+            const difficultyKeys = Object.keys(difficulties);
+            const currentIndex = difficultyKeys.indexOf(currentDifficultyKey);
+            
+            if (currentIndex < difficultyKeys.length - 1) {
+                const nextDifficultyKey = difficultyKeys[currentIndex + 1];
+                showLevelInstructions(nextDifficultyKey);
+                playSound('levelUp');
+            } else {
+                endGame(true);
+            }
+        }
+        
+        function endGame(isWin) {
+            gameActive = false;
+            
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('skyWordsHighScore', highScore);
+                highscoreDisplay.textContent = highScore;
+            }
+
+            if (isWin) {
+                messageTitle.textContent = '¡Felicidades, Piloto!';
+                messageText.innerHTML = `¡Has completado todos los niveles con éxito! <br>Puntaje final: <strong>${score}</strong>`;
+                playSound('win');
+            } else {
+                messageTitle.textContent = 'Juego Terminado';
+                messageText.innerHTML = `Tu puntaje final fue: <strong>${score}</strong>. <br>¡Vuelve a intentarlo!`;
+            }
+
+            startGameButton.textContent = 'Empezar de Nuevo'; 
+            startGameButton.onclick = () => showLevelInstructions('fácil');
+            messageBox.style.display = 'flex';
+        }
+
+        function updateScore() { scoreDisplay.textContent = score; }
+        function updateLives() { livesDisplay.textContent = '❤️'.repeat(lives); }
+        
+        function screenFlash() {
+            const flash = document.createElement('div');
+            flash.className = 'flash';
+            fxLayer.appendChild(flash);
+            setTimeout(() => fxLayer.removeChild(flash), 300);
+        }
+
+        let audioCtx;
+        function playSound(type) {
+            if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            switch (type) {
+                case 'correct':
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.3);
+                    break;
+                case 'incorrect':
+                    oscillator.type = 'square';
+                    oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.4);
+                    break;
+                case 'levelUp':
+                    oscillator.type = 'triangle';
+                    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+                    oscillator.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + 0.2);
+                    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.5);
+                    break;
+                case 'win': case 'gameOver':
+                    oscillator.type = 'sawtooth';
+                    const baseFreq = type === 'win' ? 261.63 : 130.81;
+                    oscillator.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+                    oscillator.frequency.linearRampToValueAtTime(baseFreq / (type === 'win' ? 0.5 : 2), audioCtx.currentTime + 0.8);
+                    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 1);
+                    break;
+            }
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 1);
+        }
+        init();
+    });
+</script>
+
+</body>
+</html>
+
